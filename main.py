@@ -41,8 +41,8 @@ class Button:
             surface.blit(BUTTON_TEXTURES[0], (self.loc_x, self.loc_y) )
 
 def load_image(file):
-    "loads an image, prepares it for play"
-    file = os.path.join("C:/Users/nbfri/Desktop", file)
+    """Loads and converts an image"""
+    file = os.path.join("./", file)
     try:
         surface = pygame.image.load(file)
     except pygame.error:
@@ -122,7 +122,6 @@ def main():
         if count == 500:
             lets_quit = True
 
-    pygame.mixer.music.pause()
     pygame.quit()
 
 if __name__ == '__main__': main()
