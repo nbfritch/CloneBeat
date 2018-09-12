@@ -40,9 +40,9 @@ class Button:
         else:
             surface.blit(BUTTON_TEXTURES[0], (self.loc_x, self.loc_y) )
 
-def load_image(file):
+def load_asset(file):
     """Loads and converts an image"""
-    file = os.path.join("./", file)
+    file = os.path.join("./assets", file)
     try:
         surface = pygame.image.load(file)
     except pygame.error:
@@ -75,7 +75,7 @@ def main():
         'perfect_8.png',
     ]
 
-    raw_textures = [load_image(name) for name in texture_names]
+    raw_textures = [load_asset(name) for name in texture_names]
     scaled_textures = [
         pygame.transform.scale(texture, (20 * UNIT_SCALE, 20 * UNIT_SCALE))
         for texture in raw_textures
