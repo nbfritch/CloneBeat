@@ -1,44 +1,179 @@
+"""Clonebeat"""
 import os
+import json
 import pygame
-from pygame.locals import *
+from pygame.locals import Rect
 
 UNIT_SCALE = 9
 SCREENSIZE = Rect(0, 0, 90*UNIT_SCALE, 90*UNIT_SCALE)
 
-DEFAULT_ANIMATION_STATE = 0
-MISS_ANIMIATION_STATE = 1
-GOOD_ANIMATION_STATE = 2
-GREAT_ANIMATION_STATE = 3
-PERFECT_ANIMATION_STATE = 4
+NOT_ANIMATING_STATE = 0
+NOT_HIT_ANIMATION_STATE = 1
+MISS_ANIMIATION_STATE = 2
+GOOD_ANIMATION_STATE = 3
+GREAT_ANIMATION_STATE = 4
+PERFECT_ANIMATION_STATE = 5
 
-def get_spacing(x):
+KEY_MAPPING = {
+    pygame.K_1: 0,
+    pygame.K_q: 1,
+    pygame.K_a: 2,
+    pygame.K_z: 3,
+    pygame.K_2: 4,
+    pygame.K_w: 5,
+    pygame.K_s: 6,
+    pygame.K_x: 7,
+    pygame.K_3: 8,
+    pygame.K_e: 9,
+    pygame.K_d: 10,
+    pygame.K_c: 11,
+    pygame.K_4: 12,
+    pygame.K_r: 13,
+    pygame.K_f: 14,
+    pygame.K_v: 15
+}
+
+def get_spacing(number):
     """Calculates the position that a button should be rendered"""
-    return (3 + x * 21) * UNIT_SCALE
+    return (3 + number * 21) * UNIT_SCALE
+
+def validate_song(song_array):
+    """Function to ensure that a song does not define button presses
+        that are faster than the game can display"""
+    ids = set(x['id'] for x in song_array)
+    if max(ids) > 15:
+        return False
+
+    for i in ids:
+        button_instructions = [s['offset'] for s in song_array if s['id'] == i]
+        button_instructions.sort()
+        if button_instructions:
+            previous = button_instructions[0]
+            for index in range(1, len(button_instructions)):
+                if button_instructions[index] - previous < 190:
+                    return False
+                button_instructions[index] = previous
+
+    return True
+
+class Game:
+    """Class that represents the game"""
+    def __init__(self, screen):
+        self.screen = screen
+        self.buttons = []
+        self.instructions = []
+        self.textures = []
+
+    def create_buttons(self):
+        """Build us some buttons"""
+        id_count = 0
+        for row in range(0, 4):
+            for col in range(0, 4):
+                self.buttons.append(Button(row, col, id_count))
+                id_count += 1
+
+    def load_textures(self):
+        """Load and scale the textures from file"""
+        texture_names = [f"{x}.png" for x in range(0, 28)]
+
+        raw_textures = [load_asset(name) for name in texture_names]
+        scaled_textures = [
+            pygame.transform.scale(texture, (20 * UNIT_SCALE, 20 * UNIT_SCALE))
+            for texture in raw_textures
+        ]
+
+        self.textures = scaled_textures
+
+    def load_song(self, song_instructions):
+        """Load a song array to be played"""
+        self.instructions = song_instructions
+
+    def run(self):
+        """Main game loop"""
+        song_duration = max(set(i['offset'] for i in self.instructions))
+
+        print(song_duration)
+
+        for button in self.buttons:
+            button.blank(self.screen, self.textures)
+            button.instructions = [x['offset'] for x in self.instructions if x['id'] == button.id]
+            button.instructions.sort()
+        pygame.display.flip()
+
+        game_start_time = pygame.time.get_ticks()
+        last_render = game_start_time
+        game_end_time = game_start_time + song_duration + 5000
+        frame_start_time = game_start_time
+
+        self.instructions.reverse()
+
+        current_instructions = []
+        current_instructions.append(self.instructions.pop())
+        # to do: figure out how to get all the instruction that will need hit
+
+        while frame_start_time < game_end_time:
+            frame_start_time = pygame.time.get_ticks()
+            events = pygame.event.get()
+            for event in events:
+                if event.type == pygame.KEYDOWN:
+                    if event.key in list(KEY_MAPPING.keys()):
+                        self.buttons[KEY_MAPPING[event.key]].hit()
+                        print(f"Key {KEY_MAPPING[event.key]}")
+
+            if frame_start_time > last_render + 15:
+                frame_advance = (last_render - frame_start_time) / 16
+                for button in self.buttons:
+                    button.render(self.screen, self.textures, frame_advance)
+
+                last_render = pygame.time.get_ticks()
 
 class Button:
-    def __init__(self, row, col):
+    """Touch the button"""
+    def __init__(self, row, col, button_id):
+        self.button_id = button_id
         self.loc_x = get_spacing(row)
         self.loc_y = get_spacing(col)
-        self.animation_frame = 0
-        self.is_animating = False
+        self.animation_state = NOT_ANIMATING_STATE
+        self.frame = 0
 
-    def update(self, frame_advance, done):
-        if done:
-            self.animation_frame = 0
-            self.is_animating = False
-        else:
-            self.animation_frame += frame_advance
-            self.is_animating = True
+    def blank(self, surface, textures):
+        """Shortcut to show a blank square"""
+        surface.blit(textures[0], (self.loc_x, self.loc_y))
+        self.frame = 1
 
-    def render(self, surface, BUTTON_TEXTURES):
-        if self.animation_frame == len(BUTTON_TEXTURES) -1:
-            self.is_animating = False
-        
-        if self.is_animating:
-            surface.blit(BUTTON_TEXTURES[self.animation_frame % len(BUTTON_TEXTURES)], (self.loc_x, self.loc_y) )
-            self.animation_frame += 1
-        else:
-            surface.blit(BUTTON_TEXTURES[0], (self.loc_x, self.loc_y) )
+    def hit(self):
+        """Represents a hit on the button"""
+        if self.animation_state == NOT_HIT_ANIMATION_STATE:
+            if self.frame in range(23, 27):
+                self.animation_state = PERFECT_ANIMATION_STATE
+            elif self.frame in range(15, 23):
+                self.animation_state = GREAT_ANIMATION_STATE
+            elif self.frame in range(1, 15):
+                self.animation_state = GOOD_ANIMATION_STATE
+
+    def render(self, surface, textures, frame_advance=1):
+        """Draw the button onto the surface"""
+        if self.animation_state == NOT_ANIMATING_STATE:
+            return
+
+        if self.animation_state == NOT_HIT_ANIMATION_STATE:
+            self.frame = self.frame + frame_advance
+            if self.frame >= 27:
+                self.animation_state = MISS_ANIMIATION_STATE
+            surface.blit(textures[self.frame], (self.loc_x, self.loc_y))
+            return
+
+        if self.animation_state == GOOD_ANIMATION_STATE:
+            return
+
+        if self.animation_state == GREAT_ANIMATION_STATE:
+            return
+
+        if self.animation_state == PERFECT_ANIMATION_STATE:
+            return
+
+        if self.animation_state == MISS_ANIMIATION_STATE:
+            return
 
 def load_asset(file):
     """Loads and converts an image"""
@@ -50,78 +185,35 @@ def load_asset(file):
     return surface.convert()
 
 def main():
+    """Entry point of game"""
     pygame.init()
 
+    start_time = pygame.time.get_ticks()
     bestdepth = pygame.display.mode_ok(SCREENSIZE.size, 0, 32)
     screen = pygame.display.set_mode(SCREENSIZE.size, 0, bestdepth)
 
-    texture_names = [
-        'empty.png',
-        '1.png',
-        '2.png',
-        '3.png',
-        '4.png',
-        '5.png',
-        '6.png',
-        '7.png',
-        '8.png',
-        'perfect_1.png',
-        'perfect_2.png',
-        'perfect_3.png',
-        'perfect_4.png',
-        'perfect_5.png',
-        'perfect_6.png',
-        'perfect_7.png',
-        'perfect_8.png',
-    ]
+    gaimu = Game(screen)
+    gaimu.create_buttons()
+    gaimu.load_textures()
+    song_file = open('./song.jsonc', 'r')
+    song = json.loads(song_file.read())
+    song_file.close()
+    if not validate_song(song):
+        print("ERR, could not validate song")
+        exit(1)
 
-    raw_textures = [load_asset(name) for name in texture_names]
-    scaled_textures = [
-        pygame.transform.scale(texture, (20 * UNIT_SCALE, 20 * UNIT_SCALE))
-        for texture in raw_textures
-    ]
+    gaimu.load_song(song)
 
-    BUTTON_TEXTURES = scaled_textures
+    for _ in range(0, 500):
+        gaimu.run()
+        pygame.time.delay(16)
 
-    button_container = []
-    for row in range(0,4):
-        for col in range(0,4):
-            button_container.append(Button(row,col))
-
-    lets_quit = False
-
-    count = 0
-
-    def render_buttons():
-        for button in button_container:
-            button.render(screen, BUTTON_TEXTURES)
-        pygame.display.flip()
-        pygame.time.delay(50)
-
-    render_buttons()
-    pygame.time.delay(1000)
-    button_container[0].update(1,False)
-    render_buttons()
-    button_container[5].update(1,False)
-    render_buttons()
-    button_container[10].update(1,False)
-    render_buttons()
-    button_container[15].update(1,False)
-    render_buttons()
-    button_container[12].update(1,False)
-    render_buttons()
-    button_container[9].update(1,False)
-    render_buttons()
-    button_container[6].update(1,False)
-    render_buttons()
-    button_container[3].update(1,False)
-    render_buttons()
-    while not lets_quit:
-        render_buttons()
-        count = count + 1
-        if count == 500:
-            lets_quit = True
+    end_time = pygame.time.get_ticks()
+    print(f"Finished initialization in {end_time - start_time} ms")
+    del start_time
+    del end_time
 
     pygame.quit()
 
-if __name__ == '__main__': main()
+if __name__ == '__main__':
+    main()
