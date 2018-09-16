@@ -88,6 +88,15 @@ class Game:
         """Load a song array to be played"""
         self.instructions = song_instructions
 
+    def next_instruction(self):
+        """Returns array of the next instructions to be executed"""
+        current_instructions = []
+        first_instruction = self.instructions.pop()
+        current_instructions.append(first_instruction)
+        while self.instructions[0]['offset'] == first_instruction['offset']:
+            current_instructions.append(self.instructions.pop())
+        return current_instructions
+
     def run(self):
         """Main game loop"""
         song_duration = max(set(i['offset'] for i in self.instructions))
@@ -106,10 +115,6 @@ class Game:
         frame_start_time = game_start_time
 
         self.instructions.reverse()
-
-        current_instructions = []
-        current_instructions.append(self.instructions.pop())
-        # to do: figure out how to get all the instruction that will need hit
 
         while frame_start_time < game_end_time:
             frame_start_time = pygame.time.get_ticks()
